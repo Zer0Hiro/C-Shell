@@ -1,0 +1,3 @@
+/home/nvimzero/C-Shell/build/CMakeFiles/shell.dir
+/home/nvimzero/C-Shell/build/CMakeFiles/edit_cache.dir
+/home/nvimzero/C-Shell/build/CMakeFiles/rebuild_cache.dir
