@@ -1,50 +1,39 @@
+#include <dirent.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#define BUFFER 1024
+#include <unistd.h>
 
-typedef struct
-{
-    char* name;
-    int (*b_func)(char* args);
-} builtin_commands;
+#include "builtin.h"
 
-int shell_echo(char* command);
-int shell_exit(char* command);
-int shell_type(char* command);
-
-builtin_commands builtins[] = {
-    {"echo", &shell_echo},
-    {"exit", &shell_exit},
-    {"quit", &shell_exit},
-    {"type", &shell_type},
-};
-
-int builtins_size = sizeof(builtins) / sizeof(builtin_commands);
+// Enviroment Path
+const char* ENV_VARIABLE = "PATH";
 
 int main(int argc, char* argv[])
 {
     while (true)
     {
+        char input[BUFFER];
+        char input_copy[BUFFER];
+        char* command_word;
+        int builtin = 0;
+
         // Flush after every printf
         setbuf(stdout, NULL);
         printf("$ ");
 
         // Parse Command
-        char input[BUFFER];
         fgets(input, BUFFER, stdin);
         input[strcspn(input, "\n")] = '\0';
 
         // Make a copy for strtok
-        char input_copy[BUFFER];
         strcpy(input_copy, input);
 
         // Remove Whitespaces
-        char* command_word = strtok(input_copy, " ");
+        command_word = strtok(input_copy, " ");
 
         // Find if command is builtin
-        int builtin = 0;
         for (int i = 0; i < builtins_size; i++)
         {
             if (command_word != NULL &&
@@ -84,6 +73,7 @@ int shell_type(char* command)
     char* command_ptr = &command[strcspn(command, "type")];
     command_ptr += 5;
     command_ptr = strtok(command_ptr, " ");
+    // Builtin
     for (int i = 0; i < builtins_size; i++)
     {
         if (strcmp(command_ptr, builtins[i].name) == 0)
@@ -92,6 +82,48 @@ int shell_type(char* command)
             return 0;
         }
     }
+    // In PATH
+    char* env_p = getenv(ENV_VARIABLE);
+    if (getenv != NULL)
+    {
+        char* copy = strdup(env_p);
+        char* token = strtok(copy, ":");
+        while (token)
+        {
+            // Open directory from PATH
+            DIR* dir = opendir(token);
+            if (dir)
+            {
+                // Parse if command is there
+                while (entry = readdir(dir))
+                {
+                    if (entry->d_name[0] == '.') continue;
+                    if (strcmp(entry->d_name, command_ptr) == 0)
+                    {
+                        // command + / + token + \0
+                        char* full_path =
+                            malloc(strlen(command_ptr) + strlen(token) + 2);
+                        strcpy(full_path, token);
+                        strcat(full_path, "/");
+                        strcat(full_path, entry->d_name);
+
+                        // Check permissions
+                        if (access(full_path, X_OK) == 0)
+                        {
+                            //<command> is <full_path>
+                            printf("%s is %s\n", command_ptr, full_path);
+                            free(copy);
+                            return 0;
+                        }
+                    }
+                }
+                closedir(dir);
+            }
+            token = strtok(NULL, ":");
+        }
+        free(copy);
+    }
+    // <command>: not found
     printf("%s: not found\n", command_ptr);
     return 1;
 }
