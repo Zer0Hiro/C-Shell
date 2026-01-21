@@ -1,3 +1,5 @@
+#include "main.h"
+
 #include <dirent.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -6,17 +8,17 @@
 #include <unistd.h>
 
 #include "builtin.h"
+#include "exec.h"
 
 // Enviroment Path
-const char* ENV_VARIABLE = "PATH";
+const char *ENV_VARIABLE = "PATH";
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
     while (true)
     {
         char input[BUFFER];
-        char input_copy[BUFFER];
-        char* command_word;
+        char *command_word;
         int builtin = 0;
 
         // Flush after every printf
@@ -28,7 +30,7 @@ int main(int argc, char* argv[])
         input[strcspn(input, "\n")] = '\0';
 
         // Make a copy for strtok
-        strcpy(input_copy, input);
+        char *input_copy = strdup(input);
 
         // Remove Whitespaces
         command_word = strtok(input_copy, " ");
@@ -44,86 +46,54 @@ int main(int argc, char* argv[])
                 break;
             }
         }
+        if (builtin)
+            continue;
 
+        // Execute external program
+        if (!find_exe(input, command_word))
+            continue;
         // Not valid command
-        if (!builtin) printf("%s: command not found\n", input);
+        printf("%s: command not found\n", input);
+
+        free(input_copy);
     }
 
     return 0;
 }
 
-int shell_echo(char* command)
+// Returns directory in PATH
+char *in_path(char *command)
 {
-    char* command_ptr = &command[strcspn(command, "echo")];
-    command_ptr += 5;
-    command_ptr += strspn(command_ptr, " ");
-    printf("%s\n", command_ptr);
-    return 0;
-}
+    char *env_p = getenv(ENV_VARIABLE);
+    if (env_p == NULL)
+        return NULL;
 
-int shell_exit(char* command)
-{
-    if (command != NULL &&
-        (!(strcmp(command, "exit")) || !(strcmp(command, "quit"))))
-        exit(EXIT_SUCCESS);
-}
+    char *copy = strdup(env_p);
+    char *token = strtok(copy, ":");
 
-int shell_type(char* command)
-{
-    char* command_ptr = &command[strcspn(command, "type")];
-    command_ptr += 5;
-    command_ptr = strtok(command_ptr, " ");
-    // Builtin
-    for (int i = 0; i < builtins_size; i++)
+    while (token)
     {
-        if (strcmp(command_ptr, builtins[i].name) == 0)
+        // Calculate: dir + '/' + command + '\0'
+        int path_len = strlen(token) + 1 + strlen(command) + 1;
+        char *full_path = malloc(path_len);
+
+        if (full_path)
         {
-            printf("%s is a shell builtin\n", builtins[i].name);
-            return 0;
-        }
-    }
-    // In PATH
-    char* env_p = getenv(ENV_VARIABLE);
-    if (getenv != NULL)
-    {
-        char* copy = strdup(env_p);
-        char* token = strtok(copy, ":");
-        while (token)
-        {
-            // Open directory from PATH
-            DIR* dir = opendir(token);
-            if (dir)
+            // Build the path
+            strcpy(full_path, token);
+            strcat(full_path, "/");
+            strcat(full_path, command);
+
+            // Check if file exists and is executable
+            if (access(full_path, X_OK) == 0)
             {
-                // Parse if command is there
-                while (entry = readdir(dir))
-                {
-                    if (entry->d_name[0] == '.') continue;
-                    if (strcmp(entry->d_name, command_ptr) == 0)
-                    {
-                        // command + / + token + \0
-                        char* full_path =
-                            malloc(strlen(command_ptr) + strlen(token) + 2);
-                        strcpy(full_path, token);
-                        strcat(full_path, "/");
-                        strcat(full_path, entry->d_name);
-
-                        // Check permissions
-                        if (access(full_path, X_OK) == 0)
-                        {
-                            //<command> is <full_path>
-                            printf("%s is %s\n", command_ptr, full_path);
-                            free(copy);
-                            return 0;
-                        }
-                    }
-                }
-                closedir(dir);
+                free(copy);
+                return full_path;
             }
-            token = strtok(NULL, ":");
+            free(full_path); // Not the right directory, free and continue
         }
-        free(copy);
+        token = strtok(NULL, ":");
     }
-    // <command>: not found
-    printf("%s: not found\n", command_ptr);
-    return 1;
+    free(copy);
+    return NULL;
 }
