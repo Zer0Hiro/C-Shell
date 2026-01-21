@@ -11,47 +11,52 @@
 int find_exe(char* line, char* command_name)
 {
     char** arguments;
+    char** location;
     int arg_amount;
     // Get directory of execution
     char* path = in_path(command_name);
-    if (path != NULL)
+    // Parse commmand into an array
+    arguments = parse_args(line, &arg_amount);
+
+    location = &path;
+
+    if (path == NULL)
     {
-        pid_t pid = fork();
+        location = arguments;
+    }
+    pid_t pid = fork();
 
-        // Failed
-        if (pid == -1)
+    // Failed
+    if (pid == -1)
+    {
+        perror("fork");
+        free(path);
+        return 1;
+    }
+    // Child process
+    else if (pid == 0)
+    {
+        if (arguments != NULL)
         {
-            perror("fork");
-            free(path);
-            return 1;
+            printf("Runs program: %s\n", arguments[0]);
+            // Execute program
+            execv(*location, arguments);
+            // Error
+            perror("execv");
         }
-        // Child process
-        else if (pid == 0)
-        {
-            // Parse commmand into an array
-            arguments = parse_args(line, &arg_amount);
 
-            if (arguments != NULL)
-            {
-                // Execute program
-                execv(path, arguments);
-                // Error
-                perror("execv");
-            }
+        free(path);
+        exit(1);
+    }
+    // Parent process
+    else
+    {
+        int status;
+        waitpid(pid, &status, 0);
 
-            free(path);
-            exit(1);
-        }
-        // Parent process
-        else
-        {
-            int status;
-            waitpid(pid, &status, 0);
-
-            // Command was found and Executed
-            free(path);
-            return 0;
-        }
+        // Command was found and Executed
+        free(path);
+        return 0;
     }
     return 1;
 }
